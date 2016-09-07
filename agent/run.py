@@ -39,6 +39,10 @@ parser.add_argument("--poll-interval", dest="interval", type=int, help="Polling 
 parser.set_defaults(insecure=False)
 ARGS = parser.parse_args()
 
+global logger 
+
+
+
 def notebook_to_html(notebook_path, parameters):
     """Run all cells and convert to static html
     `notebook_path`: Path to notebook 
@@ -59,43 +63,53 @@ def notebook_to_html(notebook_path, parameters):
 
 def get_work_item():
     """Get an item from this host's work queue'"""
-    url = ARGS.server + "/hosts/{0}/work-items/head".format(HOSTNAME)
+    URL = ARGS.server + "/hosts/{0}/work-items/head".format(HOSTNAME)
     res = requests.get(URL, verify=~ARGS.insecure)
     res.raise_for_status()
+    if len(res.content) == 0 :
+        return
     return res.json()
 
 
 def upload_work(work_item, content):
     """Upload content against work item"""
-    URL = ARGS.server + "/hosts/{0}/work-items/{1}/success".format(HOSTNAME, work_item.id)
+    URL = ARGS.server + "/hosts/{0}/work-items/{1}/success".format(HOSTNAME, work_item['id'])
     res = requests.post(url=URL, data=content, headers={'Content-Type': 'application/octet-stream'}, verify=~ARGS.insecure)
     res.raise_for_status()
 
 def record_exception(work_item, exception):
     """Record exception against work item"""
-    URL = ARGS.server + "/hosts/{0}/work-items/{1}/failure".format(HOSTNAME, work_item.id)
+    URL = ARGS.server + "/hosts/{0}/work-items/{1}/failure".format(HOSTNAME, work_item['id'])
     res = requets.post(url=URL, json={"error": exception}, headers={'Content-Type': 'application/json'}, verify=~ARGS.insecure)
     res.raise_for_status()
 
 def process_work_item(item):
     """Process work item"""
+    print(item)
+    #logger = logging.basicConfig(level=1)
     try:
-        content = notebook_to_html(item.notebook, item.parameters)
-        upload_work(work_item, content)
-        logger.debug('Processed work item {0}'.format(item.id))
+        content = notebook_to_html(item['notebook_path'], item['parameters'])
+        upload_work(item, content)
+        #logger.debug('Processed work item {0}'.format(item['id']))
     except Exception as e:
-        logger.exception("Exception processing work item {0}".format(item.id))
-        record_exception(item.id, content)
+        #logger.exception("Exception processing work item {0}".format(item['id']))
+        record_exception(item['id'], content)
 
-logger = logging.basicConfig(level=0)
 
 while True:
-    time.sleep(parser.interval)
-    try:
-        item = get_work_item()
-    except Exception as e:
-        logger
-    try:
-        process_work_item(item)
-    except Exception as e:
-        logger.exception("Unhandled Exception")
+    time.sleep(ARGS.interval)
+    item = None
+    #try:
+    item = get_work_item()
+    print(item)
+    if item is None:
+        continue
+    else:
+        print(item)
+    #except Exception as e:
+    #    continue
+    #    print(e)    
+    #try:
+    process_work_item(item)
+    #except Exception as e:
+    #    logger.exception("Unhandled Exception")
