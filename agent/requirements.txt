@@ -1,0 +1,3 @@
+astsearch
+nbconvert
+requests
