@@ -13,6 +13,7 @@ var ErrQueueFull = errors.New("Queue full")
 type WorkQueue interface {
 	Push(Identifiable) (int, error) //push item to the queue, setting its Id and returning it
 	Peek() (Identifiable, error)
+	Fail(id int) error //put peeked item back into main queue
 	Delete(id int) error
 }
 
@@ -103,4 +104,18 @@ func (mq *MemoryQueue) Expire(timeout int) {
 		}
 
 	}
+}
+
+func (mq *MemoryQueue) Fail(id int) error {
+	mq.Lock()
+	defer mq.Unlock()
+	for i := range mq.leasedItems {
+		if mq.leasedItems[i].item.ID() == id {
+			item := mq.leasedItems[i]
+			mq.leasedItems = append(mq.leasedItems[:i], mq.leasedItems[i+1:]...)
+			mq.queue = append(mq.queue, item.item)
+			return nil
+		}
+	}
+	return errors.New("Item not found")
 }
